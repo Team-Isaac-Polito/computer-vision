@@ -1,45 +1,60 @@
 import cv2
+import numpy as np
 
 class MotionDetection:
     def __init__(self):
-        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2()
+        # Initialize the background subtractor.
+        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
         self.first_image_received = False
+
+        # Tunable parameters for processing.
+        self.learning_rate = -1 # compute the learning rate based on the frame count
         self.erosion_iterations = 1
         self.dilation_iterations = 1
         self.close_iterations = 1
         self.moving_average_weight = 0.5
         self.activation_threshold = 127
-        self.max_area = 5000
         self.min_area = 500
-        self.detection_limit = 5
+
         self.debug_contours = False
 
     def process_image(self, frame):
-        fgimg = self.bg_subtractor.apply(frame)
-        
-        fgimg = cv2.morphologyEx(fgimg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=self.close_iterations)
-        fgimg = cv2.erode(fgimg, None, iterations=self.erosion_iterations)
-        fgimg = cv2.dilate(fgimg, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=self.dilation_iterations)
+        # Apply background subtraction.
+        fgimg = self.bg_subtractor.apply(frame, learningRate=self.learning_rate)
 
+        # Use an elliptical kernel to better close small gaps.
+        kernel_ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        fgimg = cv2.morphologyEx(fgimg, cv2.MORPH_CLOSE, kernel_ellipse, iterations=self.close_iterations)
+        fgimg = cv2.erode(fgimg, kernel_ellipse, iterations=self.erosion_iterations)
+        fgimg = cv2.dilate(fgimg, kernel_ellipse, iterations=self.dilation_iterations)
+
+        # Create an accumulated moving average to reduce noise.
         if not self.first_image_received:
             self.accumulated_image = fgimg.copy()
             self.first_image_received = True
         else:
-            cv2.addWeighted(self.accumulated_image, (1 - self.moving_average_weight), fgimg, self.moving_average_weight, 0.0, self.accumulated_image)
+            cv2.addWeighted(self.accumulated_image,
+                            1 - self.moving_average_weight,
+                            fgimg,
+                            self.moving_average_weight,
+                            0, self.accumulated_image)
 
+        # Threshold the accumulated image to get a binary mask.
         _, thresholded = cv2.threshold(self.accumulated_image, self.activation_threshold, 255, cv2.THRESH_BINARY)
 
+        # Find contours on the processed mask.
         contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        if self.debug_contours:
-            cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
 
-        largest_contours = sorted(contours, key=cv2.contourArea, reverse=True)[:self.detection_limit]
-        for contour in largest_contours:
-            area = cv2.contourArea(contour)
-            if self.min_area <= area <= self.max_area:
-                bounding_rect = cv2.boundingRect(contour)
-                cv2.rectangle(frame, bounding_rect, (0, 0, 255), 2)
+        if contours:
+            if self.debug_contours:
+                cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
 
+            # Draw the bounding box for each individual contour.
+            for contour in contours:
+                x, y, w, h = cv2.boundingRect(contour)
+                if w * h >= self.min_area:
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        
         return frame
 
 if __name__ == "__main__":
