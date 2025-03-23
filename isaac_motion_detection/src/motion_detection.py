@@ -15,6 +15,7 @@ class MotionDetection:
         self.moving_average_weight = 0.5
         self.activation_threshold = 127
         self.min_area = 500
+        self.bx_thickness = 10
 
         self.debug_contours = False
 
@@ -53,7 +54,7 @@ class MotionDetection:
             for contour in contours:
                 x, y, w, h = cv2.boundingRect(contour)
                 if w * h >= self.min_area:
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), self.bx_thickness)
         
         return frame
 
