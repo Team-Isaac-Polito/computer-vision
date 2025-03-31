@@ -1,4 +1,7 @@
-# https://docs.ultralytics.com/tasks/detect/#val
+# This script demonstrates how to use the YOLO model for object detection using a webcam.
+# It captures video from the webcam, processes each frame with the YOLO model, and displays the detected objects with bounding boxes and labels.
+# It's for test purposes only to check if the model is working correctly on camera.
+
 
 from ultralytics import YOLO
 import cv2
