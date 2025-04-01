@@ -19,8 +19,8 @@ cd apriltag
 # Create a build directory and compile
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target install
+sudo cmake -B build -DCMAKE_BUILD_TYPE=Release
+sudo cmake --build build --target install
 ```
 
 # Add to python path
