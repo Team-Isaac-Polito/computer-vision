@@ -153,10 +153,6 @@ class OrientationDetection:
                 # Find the largest gap contour
                 gap_contour = max(contours_gap, key=cv2.contourArea)
 
-                # Debug: Draw the gap contour
-                if self.debug:
-                    cv2.drawContours(output_image, [gap_contour], -1, (0, 255, 255), 2)
-
                 # Compute the center of the gap
                 gap_points = gap_contour[:, 0, :]
                 gap_center = tuple(np.mean(gap_points, axis=0).astype(int))
@@ -190,9 +186,9 @@ class OrientationDetection:
                     centroid = (0, 0)  # Default to (0, 0) if contour area is zero
                 centroids.append(centroid)
 
-                # Debug: Draw the fitted ellipse and filled contour
+                # Draw the fitted ellipse and filled contour
+                cv2.ellipse(output_image, ellipse, (0, 255, 0), 2)
                 if self.debug:
-                    cv2.ellipse(output_image, ellipse, (0, 255, 0), 2)
                     cv2.drawContours(output_image, [contour], -1, (255, 0, 0), -1)
 
                 # Annotate the output image with the orientation label
@@ -258,15 +254,3 @@ if __name__ == "__main__":
 
     cap.release()
     cv2.destroyAllWindows()
-
-    ##img = cv2.imread('OIP.jpeg')
-    ##img = cv2.imread('PolarGridAndConcentricC0179.png')
-    ##img = cv2.imread('PolarGridAndConcentricC0179 copy.png')
-    #img = cv2.imread('Screenshot 2025-03-23 155314.png')
-    #output_image, _, _ = od.process_image(img)
-    #height, width = output_image.shape[:2]
-    #cv2.namedWindow("Detected Orientations", cv2.WINDOW_NORMAL)
-    #cv2.resizeWindow("Detected Orientations", width, height)
-    #cv2.imshow("Detected Orientations", output_image)
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
