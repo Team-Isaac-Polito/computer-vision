@@ -28,7 +28,7 @@ class OrientationDetection:
         self.debug = True
         self.text_font = cv2.FONT_HERSHEY_SIMPLEX
         self.text_scale = 0.8
-        self.text_thickness = 2
+        self.text_thickness = 1
         self.min_distance = 200
 
     def process_image(self, frame):
@@ -102,6 +102,7 @@ class OrientationDetection:
             "(R) RIGHT", "(TR) TOP RIGHT", "(T) TOP", "(TL) TOP LEFT",
             "(L) LEFT", "(BL) BOTTOM LEFT", "(B) BOTTOM", "(BR) BOTTOM RIGHT"
         ]
+        annotations = []  # List to store text annotation parameters for later drawing
 
         # Process each contour found in the image
         for contour in contours:
@@ -159,7 +160,8 @@ class OrientationDetection:
 
                 # Debug: Visualize the gap center
                 if self.debug:
-                    cv2.circle(output_image, gap_center, 5, (0, 0, 255), -1)
+                    gap_radius = max(1, int(math.sqrt(area) * 0.1))  # Adjust radius based on area
+                    cv2.circle(output_image, gap_center, gap_radius, (0, 0, 255), -1)
 
                 # Compute the orientation angle
                 final_angle = math.degrees(-math.atan2(gap_center[1] - yc, gap_center[0] - xc))
@@ -167,7 +169,8 @@ class OrientationDetection:
 
                 # Debug: Draw a line from ellipse center to gap center
                 if self.debug:
-                    cv2.line(output_image, (int(xc), int(yc)), gap_center, (255, 0, 0), 2)
+                    line_thickness = max(1, int(math.sqrt(area) * 0.01))  # Adjust thickness based on area
+                    cv2.line(output_image, (int(xc), int(yc)), gap_center, (255, 0, 0), line_thickness)
 
                 # Save the computed angle
                 detected_angles.append(final_angle)
@@ -187,16 +190,32 @@ class OrientationDetection:
                 centroids.append(centroid)
 
                 # Draw the fitted ellipse and filled contour
-                cv2.ellipse(output_image, ellipse, (0, 255, 0), 2)
+                ellipse_thickness = max(1, int(math.sqrt(area) * 0.05))  # Adjust thickness based on area
+                cv2.ellipse(output_image, ellipse, (0, 255, 0), ellipse_thickness)
                 if self.debug:
                     cv2.drawContours(output_image, [contour], -1, (255, 0, 0), -1)
 
                 # Annotate the output image with the orientation label
-                text_size = cv2.getTextSize(label, self.text_font, self.text_scale, self.text_thickness)[0]
+                text_scale = self.text_scale * max(0.4, min(1.5, math.sqrt(area) * 0.01))  # Adjust text scale based on area
+                text_thickness = self.text_thickness * max(1, int(math.sqrt(area) * 0.05))  # Adjust text thickness based on area
+                text_size = cv2.getTextSize(label, self.text_font, text_scale, text_thickness)[0]
                 text_x = int(x + (w - text_size[0]) / 2)
                 text_y = max(20, int(y - 10))
-                cv2.putText(output_image, label, (text_x, text_y),
-                            self.text_font, self.text_scale, (146, 44, 202), self.text_thickness)
+
+                # Store the annotation details
+                annotations.append({
+                    "label": label,
+                    "position": (text_x, text_y),
+                    "font": self.text_font,
+                    "scale": text_scale,
+                    "color": (146, 44, 202),
+                    "thickness": text_thickness
+                })
+            
+        # Draw every stored text annotation on top of all shapes to avoid overlaying
+        for ann in annotations:
+            cv2.putText(output_image, ann["label"], ann["position"], ann["font"],
+                        ann["scale"], ann["color"], ann["thickness"])
 
         # Handle concentric Cs
         concentric_c = zip(detected_areas, orientation_labels, centroids)
