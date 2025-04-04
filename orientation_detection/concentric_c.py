@@ -23,6 +23,7 @@ class OrientationDetection:
         self.aspect_ratio_max = 1.3
         self.max_solidity = 0.7
         self.scale_factor = 0.9
+        self.max_gap_ratio = 0.3
         
         # Debug option to display intermediate images
         self.debug = True
@@ -147,6 +148,10 @@ class OrientationDetection:
 
             # Subtract the contour mask from the ellipse boundary to find the gap
             gap_mask = cv2.subtract(ellipse_boundary, contour_mask)
+
+            # Skip the contour if the length of gap is very long relative to ellipse boundary
+            if np.sum(gap_mask) >= self.max_gap_ratio * np.sum(ellipse_boundary):
+                continue
 
             # Locate the gap region in the ellipse boundary
             contours_gap, _ = cv2.findContours(gap_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
