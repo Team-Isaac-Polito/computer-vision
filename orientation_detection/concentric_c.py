@@ -6,31 +6,29 @@ from itertools import combinations
 class OrientationDetection:
     def __init__(self):
         # Tunable parameters for preprocessing
-        self.hsv_threshold = 50
-        self.blur_kernel_size = (5, 5)
-        self.mask_morph_kernel_size = (5, 5)
+        self.hsv_threshold = 90
+        self.mask_morph_kernel_size = (3, 3)
         self.mask_morph_iterations = 1
-        self.morph_kernel_size = (5, 5)
-        self.morph_iterations = 1
-        self.threshold = 0
-        self.canny_threshold1 = 100
-        self.canny_threshold2 = 200
-        self.skip_edge_detection = True 
+        self.blur_kernel_size = (3, 3)
+        self.block_size = 13
+        self.C = 3
         
         # Tunable parameters for contour filtering
-        self.min_contour_area = 50
-        self.aspect_ratio_min = 0.7
-        self.aspect_ratio_max = 1.3
+        self.min_contour_area = 5
+        self.aspect_ratio_min = 0.6
+        self.aspect_ratio_max = 1.4
         self.max_solidity = 0.7
         self.scale_factor = 0.9
         self.max_gap_ratio = 0.3
+
+        # Tunable parameters for concentric C detection
+        self.min_distance = 10
         
         # Debug option to display intermediate images
-        self.debug = True
+        self.debug = False
         self.text_font = cv2.FONT_HERSHEY_SIMPLEX
         self.text_scale = 0.8
         self.text_thickness = 1
-        self.min_distance = 200
 
     def process_image(self, frame):
         # Convert input frame to HSV color space for color filtering
@@ -43,9 +41,10 @@ class OrientationDetection:
         # Create a mask for black color
         mask = cv2.inRange(hsv, lower_black, upper_black)
 
-        # Apply morphological operations to clean up the mask
-        morph_mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.mask_morph_kernel_size, iterations=self.mask_morph_iterations)
-        
+        # Dilate the mask to broaden the black regions
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.mask_morph_kernel_size)
+        morph_mask = cv2.dilate(mask, kernel, iterations=self.mask_morph_iterations)
+
         # Apply the mask to isolate black regions
         filtered = frame.copy()
         filtered[morph_mask == 0] = [255, 255, 255]  # Set non-black regions to white
@@ -56,35 +55,24 @@ class OrientationDetection:
         # Apply Gaussian blur to reduce noise
         image = cv2.GaussianBlur(image, self.blur_kernel_size, 0)
         
-        # Apply thresholding with OTSU to isolate the object (inversion applied)
-        _, binary = cv2.threshold(image, self.threshold, 255,
-                      cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        # Apply adaptive thresholding to isolate the object (inversion applied)
+        binary = cv2.adaptiveThreshold(
+            image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY_INV, self.block_size, self.C
+        )
         
-        # Apply morphological closing to fill gaps in the object boundary
-        morph_kernel = np.ones(self.morph_kernel_size, np.uint8)
-        morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, morph_kernel, iterations=self.morph_iterations)
-        
-        # skip edge detection if specified (for simple cases)
-        if self.skip_edge_detection:
-            # Skip edge detection and directly find contours on the morph result
-            contours, _ = cv2.findContours(morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            edges = morph  # Use morph as the edge map for visualization
-        else:
-            # Perform Canny edge detection
-            edges = cv2.Canny(morph, self.canny_threshold1, self.canny_threshold2)
-            # Find contours on the edge map
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Debug: show intermediate images if desired
+        # Find contours on the thresholded result
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Debug: show intermediate images
         if self.debug:
-            debug_images = {                
+            debug_images = {
                 "Original": frame,
+                "HSV": hsv,
                 "Mask": mask,
                 "Morph Mask": morph_mask,
                 "Binary": binary,
-                "Morph": morph,
-                "Edges": edges,
-                "Contours": cv2.drawContours(cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR), contours, -1, (0, 255, 0), 2)
+                "Contours": cv2.drawContours(cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR), contours, -1, (0, 255, 0), 2)
             }
 
             for name, img in debug_images.items():
