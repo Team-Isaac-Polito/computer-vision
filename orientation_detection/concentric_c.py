@@ -1,7 +1,8 @@
 import cv2
 import math
 import numpy as np
-from itertools import combinations
+from sklearn.cluster import DBSCAN
+import scipy.spatial.distance as dist
 
 class OrientationDetection:
     def __init__(self):
@@ -86,7 +87,8 @@ class OrientationDetection:
         detected_angles = []       # List to store calculated orientation angles
         orientation_labels = []    # List to store associated textual orientation labels
         detected_areas = []      # List to store areas of detected contours
-        centroids = []          # List to store centroids of detected contours
+        centroids = []          # List to store centroids of ellipses
+        ellipses = []          # List to store fitted and scaled ellipses of detected contours
         labels = [
             "(R) RIGHT", "(TR) TOP RIGHT", "(T) TOP", "(TL) TOP LEFT",
             "(L) LEFT", "(BL) BOTTOM LEFT", "(B) BOTTOM", "(BR) BOTTOM RIGHT"
@@ -102,7 +104,6 @@ class OrientationDetection:
             area = cv2.contourArea(contour)
             if area < self.min_contour_area:
                 continue
-            detected_areas.append(area)
 
             # Filter by aspect ratio using the bounding rectangle
             x, y, w, h = cv2.boundingRect(contour)
@@ -146,6 +147,7 @@ class OrientationDetection:
             if contours_gap:
                 # Find the largest gap contour
                 gap_contour = max(contours_gap, key=cv2.contourArea)
+                detected_areas.append(area)
 
                 # Compute the center of the gap
                 gap_points = gap_contour[:, 0, :]
@@ -168,25 +170,19 @@ class OrientationDetection:
                 # Save the computed angle
                 detected_angles.append(final_angle)
 
+                # Store the centroid of the ellipse
+                centroids.append(center)
+
                 # Map the angle to an orientation label
                 label = labels[int((final_angle + 22.5) % 360 // 45)]
                 orientation_labels.append(label)
 
-                # Compute the center of the region surrounded by the contour for clustering
-                moments = cv2.moments(contour)
-                if moments["m00"] != 0: # M(0, 0) - Area of the object
-                    cx = int(moments["m10"] / moments["m00"])  # Center x-coordinate
-                    cy = int(moments["m01"] / moments["m00"])  # Center y-coordinate
-                    centroid = (cx, cy)
-                else:
-                    centroid = (0, 0)  # Default to (0, 0) if contour area is zero
-                centroids.append(centroid)
-
                 # Draw the fitted ellipse and filled contour
-                ellipse_thickness = max(1, int(math.sqrt(area) * 0.05))  # Adjust thickness based on area
-                cv2.ellipse(output_image, ellipse, (0, 255, 0), ellipse_thickness)
                 if self.debug:
+                    ellipse_thickness = max(1, int(math.sqrt(area) * 0.05))  # Adjust thickness based on area
+                    cv2.ellipse(output_image, ellipse, (0, 255, 0), ellipse_thickness)
                     cv2.drawContours(output_image, [contour], -1, (255, 0, 0), -1)
+                ellipses.append(ellipse)
 
                 # Annotate the output image with the orientation label
                 text_scale = self.text_scale * max(0.4, min(1.5, math.sqrt(area) * 0.01))  # Adjust text scale based on area
@@ -205,49 +201,73 @@ class OrientationDetection:
                     "thickness": text_thickness
                 })
             
-        # Draw every stored text annotation on top of all shapes to avoid overlaying
-        for ann in annotations:
-            cv2.putText(output_image, ann["label"], ann["position"], ann["font"],
-                        ann["scale"], ann["color"], ann["thickness"])
+        # Debug: Draw every stored text annotation on top of all shapes to avoid overlaying
+        if self.debug:
+            for ann in annotations:
+                cv2.putText(output_image, ann["label"], ann["position"], ann["font"],
+                            ann["scale"], ann["color"], ann["thickness"])
 
         # Handle concentric Cs
-        concentric_c = zip(detected_areas, orientation_labels, centroids)
+        concentric_c = zip(detected_areas, orientation_labels, centroids, annotations, ellipses)
         concentric_c = sorted(concentric_c, key=lambda x: x[0])  # Sort by area (ascending)
-        concentric_c_labels = ['Inner C', 'Middle C', 'Outer C']
+        concentric_c_labels = ['Inner C', 'Middle C', 'Outer C', 'Fourth C', 'Fifth C']
 
-        # Find the closest 3 centroids based on their positions
+        # Find the largest cluster of centroids with dispersion below the threshold
         concentric_c_dict = {}
         if len(centroids) >= 3:
-            min_distance = self.min_distance
-            closest_cluster = None
+            # Use DBSCAN to find clusters of centroids
+            clustering = DBSCAN(eps=self.min_distance, min_samples=3).fit(centroids)
+            labels = clustering.labels_
 
-            # Iterate through all combinations of 3 centroids
-            for cluster in combinations(centroids, 3):
-                # Calculate the sum of pairwise distances in the cluster
-                distance = (
-                    math.sqrt((cluster[0][0] - cluster[1][0]) ** 2 + (cluster[0][1] - cluster[1][1]) ** 2) +
-                    math.sqrt((cluster[1][0] - cluster[2][0]) ** 2 + (cluster[1][1] - cluster[2][1]) ** 2) +
-                    math.sqrt((cluster[2][0] - cluster[0][0]) ** 2 + (cluster[2][1] - cluster[0][1]) ** 2)
-                )
-                # Update the closest cluster if a smaller distance is found
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_cluster = cluster
+            # Identify the largest valid cluster
+            largest_cluster = None
+            largest_cluster_size = 0
+            for cluster_label in set(labels):
+                if cluster_label == -1:  # Skip noise points
+                    continue
+                cluster_indices = np.where(labels == cluster_label)[0]
+                cluster = [centroids[i] for i in cluster_indices]
 
-            # Assign labels to the closest cluster
-            if closest_cluster:
-                for idx, centroid in enumerate(closest_cluster):
-                    for area, label, c in concentric_c:
-                        if c == centroid:
+                # Calculate the dispersion of the cluster
+                mean_cluster = np.mean(cluster, axis=0)
+                dispersion = dist.cdist(cluster, [mean_cluster]).flatten()
+                avg_dispersion = np.mean(dispersion)
+
+                # Check if the cluster meets the dispersion threshold
+                if avg_dispersion < self.min_distance and len(cluster) > largest_cluster_size:
+                    largest_cluster = cluster
+                    largest_cluster_size = len(cluster)
+
+            if largest_cluster:
+                # Debug: Print out the cluster details
+                if self.debug:
+                    print("Largest cluster found with label:", cluster_label)
+                    print("Cluster size:", largest_cluster_size)
+                    print("Cluster centroids:", cluster)
+                    print("Dispersion of cluster:", dispersion)
+                
+                # Assign labels to the largest cluster
+                for idx, centroid in enumerate(largest_cluster):
+                    for area, label, c, ann, ellipse in concentric_c:
+                        if np.allclose(c, centroid, atol=1e-5):  # Match centroids
                             concentric_c_dict[concentric_c_labels[idx]] = (label, centroid, area)
+
+                            if not self.debug:
+                                # Draw the fitted ellipse of nested landolt Cs
+                                ellipse_thickness = max(1, int(math.sqrt(area) * 0.05))  # Adjust thickness based on area
+                                cv2.ellipse(output_image, ellipse, (0, 255, 0), ellipse_thickness)
+
+                                # Draw orientation annotations of nested landolt Cs
+                                cv2.putText(output_image, ann["label"], ann["position"], ann["font"],
+                                        ann["scale"], ann["color"], ann["thickness"])
                             break
 
             # Debug print out of results
             for key, value in concentric_c_dict.items():
                 print(f"{key}: {value[0]} centered at {value[1]} with area {value[2]}")
-            if min_distance < self.min_distance:
-                print("Closest cluster found with minimum distance: ", min_distance)
-        
+            if largest_cluster:
+                print("Largest cluster found with size:", largest_cluster_size)
+
         return output_image, concentric_c_dict, detected_angles
 
 if __name__ == "__main__":
