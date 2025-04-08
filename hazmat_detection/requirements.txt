@@ -1,2 +1,6 @@
 torch
 ultralytics
+pandas
+seaborn
+matplotlib
+opencv-python
