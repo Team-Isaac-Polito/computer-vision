@@ -5,8 +5,6 @@
 
 from ultralytics import YOLO
 import cv2
-from qr_reader import process_qr_codes
-from apriltag_reader import process_apriltags
 
 # Load YOLO model
 model = YOLO("runs/detect/train/weights/best.pt")
@@ -34,12 +32,6 @@ while True:
                 label = labels[i]
                 cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                 cv2.putText(frame, f'{label}: {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-    
-    # Detect and display QR codes
-    frame = process_qr_codes(frame)
-
-    # Detect and display AprilTags
-    frame = process_apriltags(frame)
 
     # Display the frame
     cv2.imshow('YOLO Detection', frame)
