@@ -41,7 +41,7 @@ def generate_launch_description():
     )
     
     set_mode_service_call = ExecuteProcess(
-        cmd=['sleep', '2', '&&', 
+        cmd=['sleep', '5', '&&',    # wait for nodes to be up
              'ros2', 'service', 'call', '/detection/set_mode', 
              'reseq_interfaces/srv/SetMode', '"{mode: 2}"'],
         output='screen',
