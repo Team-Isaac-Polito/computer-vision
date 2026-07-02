@@ -64,6 +64,7 @@ def launch_setup(context, *args, **kwargs):
         name='detector',
         output='screen',
         remappings=remappings,
+        parameters=[{'camera_frame': 'realsense_link_depth_optical_frame'}],
     )
 
     set_mode_service_call = ExecuteProcess(
