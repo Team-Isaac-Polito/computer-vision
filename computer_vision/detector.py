@@ -36,6 +36,11 @@ class Detector(Node):
         self.declare_parameter('image_topic', '/realsense/color/image_raw')
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.get_logger().info(f"Listening for images on: '{image_topic}'")
+        
+        # Camera frame parameter for TF transforms
+        self.declare_parameter('camera_frame', 'realsense_link')
+        self.camera_frame = self.get_parameter('camera_frame').get_parameter_value().string_value
+        self.get_logger().info(f"Camera frame: {self.camera_frame}")
 
         # Mode handling – QoS must match the TRANSIENT_LOCAL publisher in
         # detection_manager so the detector receives the latched mode even when
@@ -99,7 +104,6 @@ class Detector(Node):
         self.c_y = 369.6105
 
         # State
-        self.camera_frame = 'camera_depth_optical_frame'
         self.detection_counter = 1
 
         # Frame skipping for CPU-heavy modules.
