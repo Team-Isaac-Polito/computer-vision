@@ -43,6 +43,7 @@ def launch_setup(context, *args, **kwargs):
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(realsense_launch_file),
                 launch_arguments={
+                    'pointcloud.enable': 'true',
                     'align_depth.enable': 'true',
                     'rgb_camera.profile': '1280x720x30',
                     'depth_module.profile': '848x480x30',

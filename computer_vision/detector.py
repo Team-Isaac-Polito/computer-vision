@@ -33,7 +33,7 @@ class Detector(Node):
         self.bridge = CvBridge()
 
         # Declare the image topic parameter with a default value for the Realsense camera
-        self.declare_parameter('image_topic', '/camera/color/image_raw')
+        self.declare_parameter('image_topic', '/realsense/color/image_raw')
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.get_logger().info(f"Listening for images on: '{image_topic}'")
 
@@ -60,7 +60,7 @@ class Detector(Node):
 
         self.depth_subscription = self.create_subscription(
             Image,
-            '/camera/aligned_depth_to_color/image_raw',
+            '/realsense/aligned_depth_to_color/image_raw',
             self.depth_callback,
             10,
         )
