@@ -43,9 +43,13 @@ def launch_setup(context, *args, **kwargs):
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(realsense_launch_file),
                 launch_arguments={
+                    'pointcloud.enable': 'true',
                     'align_depth.enable': 'true',
                     'rgb_camera.profile': '1280x720x30',
                     'depth_module.profile': '848x480x30',
+                    'pointcloud.stream_filter': '2',        # 2 = Color stream texture
+                    'allow_no_texture_points': 'false',     # Drops uncolored points
+                    'ordered_pc': 'true',                   # Keeps cloud organized in 2D layout
                 }.items(),
             )
         )
@@ -63,6 +67,7 @@ def launch_setup(context, *args, **kwargs):
         name='detector',
         output='screen',
         remappings=remappings,
+        parameters=[{'camera_frame': 'realsense_link_depth_optical_frame'}],
     )
 
     set_mode_service_call = ExecuteProcess(
