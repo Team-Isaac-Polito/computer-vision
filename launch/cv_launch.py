@@ -56,6 +56,7 @@ def launch_setup(context, *args, **kwargs):
         executable='computer_vision.detection_manager',
         name='detection_manager',
         output='screen',
+        parameters=[{'wait_for_map': True, 'map_timeout_sec': 30.0}],
     )
 
     detector_node = Node(
