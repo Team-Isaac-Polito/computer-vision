@@ -67,6 +67,8 @@ class DetectionManager(Node):
         self.declare_parameter('robot', 'reseq')
         self.declare_parameter('csv_fsync', True)
         self.declare_parameter('csv_background', False)
+        self.declare_parameter('wait_for_map', True)
+        self.declare_parameter('map_timeout_sec', 30.0)
 
         self.target_frame = self.get_parameter('target_frame').get_parameter_value().string_value
         self.csv_default_path = (
@@ -92,6 +94,12 @@ class DetectionManager(Node):
         self.csv_path = self.csv_default_path
         self.csv_writer = None
         self.last_error = ''
+
+        # Wait for map frame to exist before processing
+        self._wait_for_map = self.get_parameter('wait_for_map').get_parameter_value().bool_value
+        self._map_timeout_sec = self.get_parameter('map_timeout_sec').get_parameter_value().double_value
+        self._map_frame_exists = False
+        self._map_wait_timer = None
 
         # TF
         self.tf_buffer = tf2_ros.Buffer()
@@ -138,7 +146,34 @@ class DetectionManager(Node):
         )
 
         self._publish_mode()
+
+        # Start timer to wait for map frame if needed
+        if self._wait_for_map:
+            self._map_wait_timer = self.create_timer(0.5, self._check_map_frame)
+
         self.get_logger().info('detection_manager ready')
+
+    def _check_map_frame(self) -> None:
+        """Check if the 'map' frame exists in TF. Called periodically until timeout."""
+        if self._map_frame_exists:
+            return
+
+        try:
+            # Check if 'map' frame exists by looking up a transform from it
+            self.tf_buffer.lookup_transform(
+                'map',
+                'map',
+                rclpy.time.Time(),
+                rclpy.duration.Duration(seconds=0.1),
+            )
+            self._map_frame_exists = True
+            if self._map_wait_timer is not None:
+                self._map_wait_timer.cancel()
+                self._map_wait_timer = None
+            self.get_logger().info('detection_manager: map frame is now available')
+        except Exception:
+            # Map frame not yet available, keep waiting
+            pass
 
     def _publish_mode(self):
         m = UInt8()
