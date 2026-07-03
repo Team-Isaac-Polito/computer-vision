@@ -18,10 +18,16 @@ from .csv_writer import CSVWriter
 
 # Detection type → marker colour (RGBA)
 _MARKER_COLORS = {
-    'object': ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.9),  # green
-    'hazmat': ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.9),  # red
-    'qr': ColorRGBA(r=0.0, g=0.5, b=1.0, a=0.9),  # blue
-    'apriltag': ColorRGBA(r=1.0, g=0.65, b=0.0, a=0.9),  # orange
+    'object': ColorRGBA(r=0.94, g=0.04, b=0.04, a=0.9),  # red
+    'hazmat': ColorRGBA(r=1.0, g=0.39, b=0.12, a=0.9),  # orange
+    'qr': ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.9),  # white
+    'apriltag': ColorRGBA(r=1.0, g=0.78, b=0.0, a=0.9),  # yellow
+}
+_MARKER_SHAPES = {
+    'object': Marker.CUBE,
+    'hazmat': Marker.CUBE,
+    'qr': Marker.CYLINDER,
+    'apriltag': Marker.SPHERE,
 }
 
 # Mode constants
@@ -257,6 +263,8 @@ class DetectionManager(Node):
     ):
         """Create a sphere + text marker pair at the detection's 3-D position."""
         colour = _MARKER_COLORS.get(det_type.lower(), _MARKER_COLORS['object'])
+        shape = _MARKER_SHAPES.get(det_type.lower(), Marker.SPHERE)
+        label = f'{name}' if name else det_type
         now = self.get_clock().now().to_msg()
 
         # Sphere marker
@@ -265,7 +273,7 @@ class DetectionManager(Node):
         sphere.header.stamp = now
         sphere.ns = 'detections'
         sphere.id = self._marker_id
-        sphere.type = Marker.SPHERE
+        sphere.type = shape
         sphere.action = Marker.ADD
         sphere.pose.position = point.point
         sphere.pose.orientation.w = 1.0
@@ -274,6 +282,7 @@ class DetectionManager(Node):
         sphere.scale.z = 0.15
         sphere.color = colour
         sphere.lifetime.sec = 0  # permanent until cleared
+        sphere.text = label  # 2D Map Writer
 
         # Text marker (label above sphere)
         text = Marker()
@@ -288,7 +297,7 @@ class DetectionManager(Node):
         text.pose.orientation.w = 1.0
         text.scale.z = 0.12  # text height
         text.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
-        label = f'{name}' if name else det_type
+
         if confidence > 0:
             label += f' ({confidence:.0%})'
         text.text = label
